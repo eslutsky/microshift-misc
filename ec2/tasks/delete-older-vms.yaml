@@ -1,0 +1,20 @@
+---
+- set_fact:
+    instance_runtime_seconds: "{{ (
+            ansible_date_time.iso8601 | to_datetime('%Y-%m-%dT%H:%M:%S%z') 
+            - item.launch_time | to_datetime('%Y-%m-%dT%H:%M:%S%z')
+          ).total_seconds() }}"
+- debug:
+    msg: "Instance {{ item.instance_id }} has been running for {{ instance_runtime_seconds }} seconds"
+
+- block:
+  - debug:
+      msg: "deleting Instance {{ item.instance_id }} that has been running for {{ instance_runtime_seconds }} seconds"
+
+  - name: Delete CloudFormation stack
+    cloudformation:
+      stack_name: "{{ stack_name }}"
+      state: absent
+      region: "{{ region }}"
+  tags: deprovision
+  when: instance_runtime_seconds|int > 15000

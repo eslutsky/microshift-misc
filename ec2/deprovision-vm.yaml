@@ -1,0 +1,16 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    region: eu-west-1
+    stack_name: "eslutsky-stack"
+  tags: deprovision  # Apply the tag to the entire play
+
+  tasks:
+    - name: Delete CloudFormation stack
+      cloudformation:
+        stack_name: "{{ stack_name }}"
+        state: absent
+        region: "{{ region }}"
+      tags: deprovision

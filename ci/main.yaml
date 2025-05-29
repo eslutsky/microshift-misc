@@ -1,0 +1,88 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Install required packages
+      dnf:
+        name:
+          - tmux
+          - git
+        state: present
+
+    - name: Configure SSH (less secure, for testing only!)
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "StrictHostKeyChecking no"
+        - "UserKnownHostsFile /dev/null"
+ 
+    - name: Set home directory permissions
+      file:
+        path: /home/{{ ansible_user }}
+        mode: 0755
+
+
+- hosts: all
+  vars:
+    CI_JOB_NAME: "pull-ci-openshift-microshift-main-e2e-aws-tests-bootc"
+  
+  tasks:
+    - name: Generate SSH key pair
+      openssh_keypair:
+        path: /home/{{ ansible_user }}/.ssh/id_rsa
+        type: rsa
+        size: 2048  # You can adjust the key size as needed
+      run_once: true
+
+    - name: Clone MicroShift repository
+      git:
+        repo: https://github.com/openshift/microshift.git
+        dest: /home/{{ ansible_user }}/microshift
+        version: main  # Or specify a branch/tag
+        update: yes
+      remote_user: ec2-user
+
+    - name: Copy pull secret
+      copy:
+        src: /home/eslutsky/.pull-secret.json
+        dest: /home/ec2-user/.pull-secret.json
+        mode: 0644
+      remote_user: ec2-user
+
+    - name: generate settings
+      copy:
+        dest: /home/ec2-user/microshift/test/scenario_settings.sh
+        mode: 0644
+        content: |
+          SSH_PUBLIC_KEY=${HOME}/.ssh/id_rsa.pub
+          SSH_PRIVATE_KEY=${HOME}/.ssh/id_rsa
+
+
+    - name: Run Build
+      include_role:
+        name: run_ci_phase
+      vars:
+        ci_job_name: "{{ CI_JOB_NAME }}"
+        script_name: "./test/bin/ci_phase_iso_build.sh"
+        stage_name: "iso_build"
+        scenarios_sources: "/home/ec2-user/microshift/test/scenarios-bootc/periodics"
+
+    - name: boot VMs
+      include_role:
+        name: run_ci_phase
+      vars:
+        ci_job_name: "{{ CI_JOB_NAME }}"
+        script_name: "./test/bin/ci_phase_iso_boot.sh"
+        stage_name: "iso_boot"
+        scenarios_sources: "/home/ec2-user/microshift/test/scenarios-bootc/periodics"
+
+    - name: run tests
+      include_role:
+        name: run_ci_phase
+      vars:
+        ci_job_name: "{{ CI_JOB_NAME }}"
+        script_name: "./test/bin/ci_phase_test.sh"
+        stage_name: "tests"
+        scenarios_sources: "/home/ec2-user/microshift/test/scenarios-bootc/periodics"

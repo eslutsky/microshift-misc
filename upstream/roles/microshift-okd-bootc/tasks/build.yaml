@@ -1,0 +1,59 @@
+---
+# --- Tasks to build a container image with the downloaded asset ---
+
+- name: Define MicroShift image name and tag
+  ansible.builtin.set_fact:
+    _microshift_image_name: "microshift-asset-image"
+    _microshift_image_tag: "{{ (_microshift_release_info.tag | default(microshift_version) | replace('v', '')) if _microshift_release_info is defined and _microshift_release_info.tag is defined else (microshift_version | replace('v', '')) }}"
+  when: microshift_asset_filename is defined # Ensure download tasks were intended to run
+
+- name: Ensure podman is installed
+  ansible.builtin.package:
+    name: podman
+    state: present
+  become: true
+  when: microshift_asset_filename is defined # Only if we are building an image
+
+- name: Create Containerfile in the download directory for the image build
+  ansible.builtin.copy:
+    dest: "{{ microshift_download_dir }}/Containerfile"
+    content: |
+      # Containerfile to package the downloaded MicroShift asset
+      FROM quay.io/centos-bootc/centos-bootc:stream9
+
+      ARG ASSET_FILENAME
+      COPY ${ASSET_FILENAME} /opt/${ASSET_FILENAME}
+      ENV KUBECONFIG=/var/lib/microshift/resources/kubeadmin/kubeconfig
+
+      # You can add more RUN instructions here, for example, to extract the asset:
+      # RUN if [[ "${ASSET_FILENAME}" == *.zip ]]; then \
+      #       microdnf install -y unzip && unzip /opt/${ASSET_FILENAME} -d /opt/microshift_payload && rm /opt/${ASSET_FILENAME} && microdnf clean all; \
+      #     elif [[ "${ASSET_FILENAME}" == *.tar.gz ]]; then \
+      #       microdnf install -y tar gzip && tar -xzf /opt/${ASSET_FILENAME} -C /opt/microshift_payload && rm /opt/${ASSET_FILENAME} && microdnf clean all; \
+      #     fi
+
+      LABEL name="{{ _microshift_image_name }}"
+      LABEL version="{{ _microshift_image_tag }}"
+      LABEL description="Image containing MicroShift asset: ${ASSET_FILENAME}"
+      RUN dnf -y install createrepo unzip
+      RUN cd /opt && unzip microshift-x86_64.zip && createrepo .
+      RUN curl https://raw.githubusercontent.com/microshift-io/microshift/3097426c2b60528edcbc7f7f2f1d28a6cddf6c48/src/create_repos.sh | bash -s "/opt"
+      RUN dnf -y install microshift microshift-topolvm ; \
+        dnf install -y microshift-flannel ; \
+        systemctl disable openvswitch ; \
+        systemctl enable microshift ; \
+    mode: '0644'
+  when: microshift_asset_filename is defined and _microshift_image_tag is defined
+
+- name: Build MicroShift asset image using podman
+  containers.podman.podman_image:
+    name: "{{ _microshift_image_name }}"
+    tag: "{{ _microshift_image_tag }}"
+    path: "{{ microshift_download_dir }}"  # Build context (contains Containerfile and asset)
+    build:
+      file: "{{ microshift_download_dir }}/Containerfile"
+      extra_args: "--build-arg BASE_IMAGE=registry.access.redhat.com/ubi8/ubi-minimal:latest"
+
+    state: build # Ensures the image is built
+  when: microshift_asset_filename is defined and _microshift_image_tag is defined
+  become: true

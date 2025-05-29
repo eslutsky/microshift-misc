@@ -1,0 +1,21 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    region: eu-west-1
+    stack_name: "eslutsky-stack"
+
+  tasks:
+    - name: gather ec2 instances 
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:aws:cloudformation:stack-name": "{{ stack_name }}"
+          instance-state-name: [ "running" ]
+      register: ec2_list
+
+    - name: delete long running instances 
+      include_tasks: "tasks/delete-older-vms.yaml"
+      loop: "{{ ec2_list.instances }}"
+

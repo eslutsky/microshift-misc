@@ -1,0 +1,36 @@
+---
+- hosts: all
+  become: true
+  vars:
+    ansible_ssh_user: ubuntu
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - tmux
+          - git
+          - podman
+        state: present
+        update_cache: yes
+
+    - name: Configure SSH (less secure, for testing only!)
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "StrictHostKeyChecking no"
+        - "UserKnownHostsFile /dev/null"
+ 
+    - name: Set home directory permissions
+      file:
+        path: /home/{{ ansible_user }}
+        mode: 0755
+
+    - name: download microshift latest RPMs from github
+      include_role:
+        name: microshift-okd-download
+
+    - name: download microshift latest RPMs from github
+      include_role:
+        name: microshift-okd-bootc
