@@ -1,0 +1,18 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+
+  tasks:
+    - name: download microshift latest RPMs from github
+      include_role:
+        name: create-vm
+      vars:
+        region: eu-west-1
+        stack_name: "eslutsky-stack"
+        cf_tpl_file: template/aws-template.yaml  # Update with actual path
+        instance_type:  c5.metal
+        ami_id: ami-0b53b236f930ad98b
+        host_device_name: /dev/xvdc
+        public_key: /home/eslutsky/.ssh/id_rsa.pub

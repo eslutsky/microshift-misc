@@ -1,0 +1,56 @@
+---
+
+- name: Create CloudFormation stack
+  cloudformation:
+    stack_name: "{{ stack_name }}"
+    state: present
+    region: "{{ region }}"
+    template: "{{ cf_tpl_file }}"
+    template_parameters:
+      HostInstanceType: "{{ instance_type }}"
+      Machinename: "{{ stack_name }}"
+      AmiId: "{{ ami_id }}"
+      HostDeviceName: "{{ host_device_name }}"
+      PublicKeyString: "{{ lookup('file', public_key) }}"
+    capabilities:
+      - CAPABILITY_NAMED_IAM
+  register: cf_result
+
+- name: Wait for stack creation to complete
+  command:
+    cmd: "aws --region {{ region }} cloudformation wait stack-create-complete --stack-name {{ stack_name }}"
+  when: cf_result.changed
+
+- name: Describe CloudFormation stack
+  command:
+    cmd: "aws --region {{ region }} cloudformation describe-stacks --stack-name {{ stack_name }}"
+  register: stack_description
+
+- name: Extract instance ID
+  set_fact:
+    instance_id: "{{ stack_description.stdout | from_json | json_query('Stacks[0].Outputs[?OutputKey==`InstanceId`].OutputValue') | first }}"
+  when: stack_description.stdout
+
+- name: Wait for instance status to be OK
+  command:
+    cmd: "aws --region {{ region }} ec2 wait instance-status-ok --instance-id {{ instance_id }}"
+  when: instance_id is defined
+
+- name: Get public IP address
+  ec2_instance_info:
+    region: "{{ region }}"
+    filters:
+      instance-id: "{{ instance_id }}"
+  register: ec2_info
+  when: instance_id is defined
+
+- name: Display public IP address
+  debug:
+    msg: "Public IP address: {{ ec2_info.instances[0].public_ip_address }}"
+  when: ec2_info.instances is defined and ec2_info.instances | length > 0 and ec2_info.instances[0].public_ip_address is defined
+
+- name: Set public IP as a fact for later use
+  set_fact:
+    public_ip: "{{ ec2_info.instances[0].public_ip_address }}"
+  when: ec2_info.instances is defined and ec2_info.instances | length > 0 and ec2_info.instances[0].public_ip_address is defined
+
