@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/venv/bin/activate"
 
 run_playbook() {
   local playbook="$1" # Second parameter, defaults to --ci
-
+  local extra_args="$2"
   instances=$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].[PublicDnsName,KeyName]" --output json)
 
   # Create a temporary inventory file
@@ -22,7 +22,7 @@ run_playbook() {
   jq -r '.[] | .[] | @tsv' <<< "$instances" | while IFS=$'\t' read -r public_dns_name key_name; do
     echo "$public_dns_name ansible_ssh_private_key_file=/path/to/your/keys/$key_name.pem" >> "$inventory_file"
   done
-  ansible-playbook -i "$inventory_file" "$playbook" 
+  ansible-playbook -i "$inventory_file" "$playbook" ${extra_args}
   rm "$inventory_file"
 }
 
@@ -31,6 +31,9 @@ run_playbook() {
 # and the function's default will apply.
 mode="${1:-provision}"
 env="${2:-upstream}"
+shift 2
+extra_args="$@"
+
 
   echo "Executing with mode: ${mode}, env: ${env}"
 
@@ -45,9 +48,13 @@ env="${2:-upstream}"
       playbook="${SCRIPT_DIR}/ec2/cleanup-old.yaml"
       echo "cleanup mode"
       ;;
+    "env")
+      export KUBECONFIG=${SCRIPT_DIR}/provision/upstream/fetched_kubeconfigs/kubeconfig
+      oc get pods
+      exit 0
+      ;;
     *)
-      playbook="${SCRIPT_DIR}/provision/${mode}/main.yaml"
-
+      playbook="${SCRIPT_DIR}/${mode}/${env}/main.yaml"
       echo "running: $mode ."
       ;;
   esac
@@ -58,5 +65,4 @@ if [ ! -f "$playbook" ]; then
 fi
 
 
-
-run_playbook "$playbook" 
+run_playbook "${playbook}" "${extra_args}"

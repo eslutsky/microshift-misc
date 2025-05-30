@@ -1,5 +1,18 @@
 ---
 
+- name: creating VM with the following parameters using CloudFormation
+  debug:
+    msg:
+      - "Region: {{ region }}"
+      - "Stack Name: {{ stack_name }}"
+      - "Instance Type: {{ instance_type }}"
+      - "AMI ID: {{ ami_id }}"
+      - "Public Key Path: {{ public_key }}"
+      - "CloudFormation Template File: {{ cf_tpl_file }}"
+      - "Host Device Name: {{ host_device_name }}"
+  tags:
+    - always # Ensures this task always runs
+
 - name: Create CloudFormation stack
   cloudformation:
     stack_name: "{{ stack_name }}"
@@ -53,4 +66,3 @@
   set_fact:
     public_ip: "{{ ec2_info.instances[0].public_ip_address }}"
   when: ec2_info.instances is defined and ec2_info.instances | length > 0 and ec2_info.instances[0].public_ip_address is defined
-

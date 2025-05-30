@@ -4,14 +4,6 @@ FROM quay.io/centos-bootc/centos-bootc:stream9
 ARG ASSET_FILENAME
 COPY ${ASSET_FILENAME} /opt/${ASSET_FILENAME}
 ENV KUBECONFIG=/var/lib/microshift/resources/kubeadmin/kubeconfig
-
-# You can add more RUN instructions here, for example, to extract the asset:
-# RUN if [[ "${ASSET_FILENAME}" == *.zip ]]; then \
-#       microdnf install -y unzip && unzip /opt/${ASSET_FILENAME} -d /opt/microshift_payload && rm /opt/${ASSET_FILENAME} && microdnf clean all; \
-#     elif [[ "${ASSET_FILENAME}" == *.tar.gz ]]; then \
-#       microdnf install -y tar gzip && tar -xzf /opt/${ASSET_FILENAME} -C /opt/microshift_payload && rm /opt/${ASSET_FILENAME} && microdnf clean all; \
-#     fi
-
 LABEL name="microshift-asset-image"
 LABEL version="4.19.0"
 LABEL description="Image containing MicroShift asset: ${ASSET_FILENAME}"

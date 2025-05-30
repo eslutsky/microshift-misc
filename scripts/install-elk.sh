@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-export KUBECONFIG=${SCRIPT_DIR}/../upstream/fetched_kubeconfigs/kubeconfig
+export KUBECONFIG=${SCRIPT_DIR}/../provision/upstream/fetched_kubeconfigs/kubeconfig
 
 cat <<EOF | oc apply -f -
 kind: PersistentVolumeClaim
