@@ -1,0 +1,8 @@
+http.host: "0.0.0.0"
+pipeline.ecs_compatibility: disabled
+# Add X-Pack monitoring settings here
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.hosts: [ "https://192.168.1.140:30020" ]
+xpack.monitoring.elasticsearch.username: "elastic" # If auth is enabled
+xpack.monitoring.elasticsearch.password: "97D4D7Sn9nasZI3520op8Byk" # Use env var
+xpack.monitoring.elasticsearch.ssl.verification_mode: "none" # Use env var

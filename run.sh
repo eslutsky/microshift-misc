@@ -17,10 +17,14 @@ run_playbook() {
   # Create a temporary inventory file
   inventory_file=$(mktemp)
 
+  #echo "[static_hosts]" > "$inventory_file"
+  #echo "fedoradev ansible_ssh_user=eslutsky ansible_ssh_private_key_file=/path/to/your/keys/$key_name.pem" >> "$inventory_file"
+
   # Write the inventory to the file
-  echo "[aws_hosts]" > "$inventory_file"
+  # for ubuntu ansible_ssh_user=ubuntu
+  echo "[aws_hosts]" >> "$inventory_file"
   jq -r '.[] | .[] | @tsv' <<< "$instances" | while IFS=$'\t' read -r public_dns_name key_name; do
-    echo "$public_dns_name ansible_ssh_private_key_file=/path/to/your/keys/$key_name.pem" >> "$inventory_file"
+    echo "$public_dns_name ansible_ssh_user=ec2-user ansible_ssh_private_key_file=/path/to/your/keys/$key_name.pem" >> "$inventory_file"
   done
   ansible-playbook -i "$inventory_file" "$playbook" ${extra_args}
   rm "$inventory_file"

@@ -1,17 +1,25 @@
 ---
 - hosts: all
   become: true
-  vars:
-    ansible_ssh_user: ubuntu
   tasks:
+    - name: Ensure python bindings for DNF5 are present (for DNF-based systems)
+      ansible.builtin.package:
+        name: python3-libdnf5
+        state: present
+      when: ansible_pkg_mgr == "dnf"
+      # If this task fails because the package doesn't exist on an older DNF system (not using DNF5),
+      # we ignore the error, as the main package task will then use the available DNF.
+      ignore_errors: true
+
     - name: Install required packages
-      apt:
+      ansible.builtin.package: # Using FQCN for clarity and best practice
         name:
           - tmux
           - git
           - podman
         state: present
-        update_cache: yes
+        update_cache: "{{ true if ansible_os_family == 'Debian' else omit }}" # update_cache is specific to apt/Debian
+
 
     - name: Configure SSH (less secure, for testing only!)
       lineinfile:

@@ -5,6 +5,45 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 export KUBECONFIG=${SCRIPT_DIR}/../provision/upstream/fetched_kubeconfigs/kubeconfig
 
 cat <<EOF | oc apply -f -
+apiVersion: v1
+data:
+  Corefile: |
+    .:5353 {
+        bufsize 1232
+        errors
+        log . {
+            class error
+        }
+        health {
+            lameduck 20s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+        }
+        prometheus 127.0.0.1:9153
+        forward . 8.8.8.8 {
+            policy sequential
+        }
+        cache 900 {
+            denial 9984 30
+        }
+        reload
+    }
+    hostname.bind:5353 {
+        chaos
+    }
+kind: ConfigMap
+metadata:
+  labels:
+    dns.operator.openshift.io/owning-dns: default
+  name: dns-default
+  namespace: openshift-dns
+EOF
+
+
+cat <<EOF | oc apply -f -
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -314,4 +353,43 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: filebeat
+EOF
+
+cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Service
+
+spec:
+  type: NodePort
+  selector:
+    ingresscontroller.operator.openshift.io/deployment-ingresscontroller: default
+  ports:
+    - name: elastic
+      port: 9200
+      targetPort: 9200
+      nodePort: 30200
+EOF
+
+cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: es-default-node
+  name: es-default-node
+  namespace: default
+spec:
+  ports:
+  - name: "9200"
+    nodePort: 30020
+    port: 9200
+    protocol: TCP
+    targetPort: 9200
+  selector:
+    common.k8s.elastic.co/type: elasticsearch
+    elasticsearch.k8s.elastic.co/cluster-name: quickstart
+  sessionAffinity: None
+  type: NodePort
+status:
+  loadBalancer: {}
 EOF

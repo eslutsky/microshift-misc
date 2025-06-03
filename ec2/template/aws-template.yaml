@@ -178,6 +178,10 @@ Resources:
         ToPort: 6443
         CidrIp: 0.0.0.0/0
       - IpProtocol: tcp
+        FromPort: 9200
+        ToPort: 9200
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
         FromPort: 30000
         ToPort: 32767
         CidrIp: 0.0.0.0/0
