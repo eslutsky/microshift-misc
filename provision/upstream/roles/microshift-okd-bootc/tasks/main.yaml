@@ -11,6 +11,3 @@
 
 - name: fetch kubeconfig from bootc container
   ansible.builtin.include_tasks: fetch-kubeconfig.yaml
-
-  # Add 'become: true' if your podman setup requires root for builds,
-  # or ensure your Ansible user is configured for rootless podman builds.

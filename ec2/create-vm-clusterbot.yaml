@@ -1,0 +1,164 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # Define the path to the public key file
+    # The '~' will be expanded to the user's home directory on the Ansible control node
+    local_public_key_path: "~/.ssh/id_rsa.pub"
+
+  tasks:
+  - name: Find local files starting with 'cluster-bot' in the current directory
+    ansible.builtin.find:
+      paths: "/home/eslutsky/Downloads"  # Or specify a more precise directory, e.g., "/path/to/search"
+      patterns: "cluster-bot*"
+      # use_regex: false # Default, treats patterns as shell globs
+      # recurse: no      # Set to yes if you want to search in subdirectories
+    register: found_cluster_bot_files
+    delegate_to: localhost # Ensures this runs on the Ansible control node
+
+  - name: Read public SSH key content
+    ansible.builtin.set_fact:
+      public_ssh_key: "{{ lookup('file', local_public_key_path) }}"
+    delegate_to: localhost
+    run_once: true # Ensure this runs only once, even if multiple hosts were targeted (though this playbook targets localhost)
+
+  - name: Set fact for the latest cluster-bot file
+    ansible.builtin.set_fact:
+      latest_cluster_bot_file: "{{ (found_cluster_bot_files.files | sort(attribute='mtime', reverse=true) | list | first).path | default(omit) }}"
+    when: found_cluster_bot_files.files | length > 0
+
+  - name: Display the latest found file
+    ansible.builtin.debug:
+      msg: "Latest cluster-bot file found: {{ latest_cluster_bot_file }}"
+    when: latest_cluster_bot_file is defined
+
+  - name: Read kubeconfig file content for IP extraction
+    ansible.builtin.set_fact:
+      _kubeconfig_content_for_ip: "{{ lookup('file', latest_cluster_bot_file) | from_yaml }}"
+    when: latest_cluster_bot_file is defined
+    delegate_to: localhost
+
+  - name: Extract server IP from kubeconfig
+    ansible.builtin.set_fact:
+      kubeconfig_server_ip: "{{ (_kubeconfig_content_for_ip.clusters[0].cluster.server | urlsplit('hostname')) | default(omit) }}"
+    when:
+      - _kubeconfig_content_for_ip is defined
+      - _kubeconfig_content_for_ip.clusters is defined
+      - _kubeconfig_content_for_ip.clusters | length > 0
+      - _kubeconfig_content_for_ip.clusters[0].cluster is defined
+      - _kubeconfig_content_for_ip.clusters[0].cluster.server is defined
+
+  - name: Display extracted server IP
+    ansible.builtin.debug:
+      msg: "Extracted server IP from kubeconfig: {{ kubeconfig_server_ip }}"
+    when: kubeconfig_server_ip is defined
+  
+  - name: Kubeconfig processing and Kubernetes interaction block
+    block:
+      - name: Attempt to list nodes using the kubeconfig
+        community.kubernetes.k8s_info:
+          kubeconfig: "{{ latest_cluster_bot_file }}"
+          kind: Node
+          wait: true
+          wait_timeout: 10
+        register: k8s_nodes_info
+        when: latest_cluster_bot_file is defined
+
+      - name: Report Kubernetes node listing status (success)
+        ansible.builtin.debug:
+          msg: "Successfully validated kubeconfig and listed {{ k8s_nodes_info.resources | length }} node(s)."
+        when:
+          - latest_cluster_bot_file is defined
+          - k8s_nodes_info is defined # k8s_nodes_info.failed will not be true here due to block/rescue
+
+      - name: Extract the first node name
+        ansible.builtin.set_fact:
+          first_k8s_node_name: "{{ k8s_nodes_info.resources[0].metadata.name | default(omit) }}"
+        when:
+          - latest_cluster_bot_file is defined
+          - k8s_nodes_info is defined
+          - k8s_nodes_info.resources is defined # Implicitly k8s_nodes_info.failed is false
+          - k8s_nodes_info.resources | length > 0
+
+      - name: Display the extracted node name
+        ansible.builtin.debug:
+          msg: "Name of the first Kubernetes node found: {{ first_k8s_node_name }}"
+        when: first_k8s_node_name is defined
+
+      - name: Run 'cat /etc/hosts' on node via oc debug and chroot
+        ansible.builtin.shell: |
+          cat <<EOF | oc --kubeconfig {{ latest_cluster_bot_file }} debug node/{{ first_k8s_node_name }}
+          chroot /host bash
+          echo "{{ public_ssh_key }}" >> /home/ec2-user/.ssh/authorized_keys
+          exit
+          EOF
+        args:
+          executable: /bin/bash # Ensures bash is used for the heredoc
+        register: oc_debug_chroot_result
+        when: first_k8s_node_name is defined and latest_cluster_bot_file is defined
+        delegate_to: localhost # 'oc' command runs on the control node
+        changed_when: false    # 'oc debug' is generally for inspection
+        ignore_errors: true    # To allow inspecting the output even on failure
+
+      - name: Display oc debug chroot command result
+        ansible.builtin.debug:
+          msg: |
+            Return Code: {{ oc_debug_chroot_result.rc | default('N/A') }}
+            Stdout:
+            {{ oc_debug_chroot_result.stdout | default('N/A') }}
+            Stderr:
+            {{ oc_debug_chroot_result.stderr | default('N/A') }}
+        when: oc_debug_chroot_result is defined
+
+      - name: Add kubeconfig server IP to in-memory inventory
+        ansible.builtin.add_host:
+          name: "{{ kubeconfig_server_ip }}"
+          groups: kube_servers
+          ansible_user: ec2-user  # Or your default remote user for SSH
+        when: kubeconfig_server_ip is defined
+        changed_when: false
+
+      - name: Ping the kubeconfig server IP
+        ansible.builtin.ping:
+        delegate_to: "{{ kubeconfig_server_ip }}"
+        when: kubeconfig_server_ip is defined and hostvars[kubeconfig_server_ip] is defined
+        register: ping_kube_server_result
+        ignore_errors: true
+
+      - name: Display ping result for kubeconfig server IP
+        ansible.builtin.debug:
+          msg: "Ping to {{ kubeconfig_server_ip }}: {{ 'Success' if ping_kube_server_result.ping == 'pong' else 'Failed' }}. Details: {{ ping_kube_server_result }}"
+        when: ping_kube_server_result is defined
+
+      - name: Add kubeconfig server IP to static inventory file ./inventory/clusterbot
+        ansible.builtin.copy:
+          dest: "../inventory/clusterbot"
+          content: "{{ kubeconfig_server_ip }} ansible_user=ec2-user ansible_ssh_private_key_file=~/.ssh/id_rsa"
+          # create: true is implicit with copy if dest doesn't exist and content is provided
+          mode: '0644'
+        when: kubeconfig_server_ip is defined
+        delegate_to: localhost
+        become: false
+
+    rescue:
+      - name: Report Kubernetes node listing failure
+        ansible.builtin.debug:
+          msg: |
+            Failed to list nodes using '{{ latest_cluster_bot_file }}'.
+            The cluster might be unreachable, or there was an authentication issue.
+            Error (if any): {{ k8s_nodes_info.msg | default(ansible_failed_result.msg | default('Unknown error during node listing.')) }}
+        when: latest_cluster_bot_file is defined
+
+      - name: Delete local kubeconfig file due to failure
+        ansible.builtin.file:
+          path: "{{ latest_cluster_bot_file }}"
+          state: absent
+        when: latest_cluster_bot_file is defined
+        delegate_to: localhost
+
+      - name: Fail playbook due to error listing Kubernetes nodes
+        ansible.builtin.fail:
+          msg: "Stopping playbook: Failed to list Kubernetes nodes using {{ latest_cluster_bot_file }}. The file has been deleted."
+        when: latest_cluster_bot_file is defined

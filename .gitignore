@@ -1,3 +1,4 @@
 cache/
 venv/
 fetched_kubeconfigs/
+inventory

@@ -16,3 +16,11 @@ for region in $(aws ec2 describe-regions --query 'Regions[].RegionName' --output
   )"
 done
 ```
+
+
+## create-vm-clusterbot.yaml
+- This playbook searches for the latest 'cluster-bot' downloaded kubeconfig file. 
+- attempts to list the nodes in the corresponding Kubernetes cluster 
+- adds the local SSH public key to the `authorized_keys` the node using `oc debug node/<node_name>`.
+- uses this information to prepare an Ansible inventory for ssh provisioning.
+  
