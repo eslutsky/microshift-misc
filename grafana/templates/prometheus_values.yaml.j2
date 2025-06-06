@@ -1,0 +1,28 @@
+# This is a basic example for prometheus_values.yaml.j2
+# It reflects the modification made by the `yq` command in the original script.
+# Copy your actual prometheus_config.yaml content here and adapt the templating.
+
+server:
+  service:
+    type: NodePort
+    nodePort: {{ prometheus_service_nodeport }}
+    servicePort: 80 # Internal port for Prometheus server
+
+serverFiles:
+  prometheus.yml:
+    scrape_configs:
+      - job_name: 'node-exporter'
+        # Add any specific scrape interval, timeout, etc.
+        # scrape_interval: 15s
+        static_configs:
+          - targets:
+            {% if monitoring_target_host_ip is defined and monitoring_target_host_ip %}
+              - "{{ monitoring_target_host_ip }}:{{ node_exporter_service_nodeport }}"
+            {% else %}
+              # Fallback or default target if needed, or leave empty to rely on service discovery
+              # - "node-exporter.monitoring.svc.cluster.local:9100"
+            {% endif %}
+      # Add other scrape_configs as needed
+      # - job_name: 'kubernetes-pods'
+      #   kubernetes_sd_configs:
+      #   - role: pod

@@ -1,0 +1,40 @@
+---
+- name: Ensure remote Helm values directory exists for Grafana
+  ansible.builtin.file:
+    path: "{{ remote_helm_values_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Template Grafana Helm values file
+  ansible.builtin.template:
+    src: grafana_values.yaml.j2
+    dest: "{{ remote_helm_values_dir }}/grafana_values.yaml"
+    mode: '0644'
+
+- name: Deploy Grafana with Helm
+  community.kubernetes.helm:
+    name: "{{ grafana_release_name }}"
+    chart_ref: "{{ grafana_chart_name }}"
+    chart_repo_url: "{{ grafana_chart_repo }}"
+    chart_version: "{{ grafana_chart_version }}"
+    release_namespace: "{{ grafana_namespace }}"
+    create_namespace: "{{ grafana_create_namespace }}"
+    values_files:
+      - "{{ remote_helm_values_dir }}/grafana_values.yaml"
+    state: present
+    wait: true
+    timeout: "5m"
+  tags:
+    - grafana
+
+- name: Display Grafana endpoint
+  ansible.builtin.debug:
+    msg: "Grafana: http://{{ monitoring_host_ip }}:{{ grafana_service_nodeport }}{{ grafana_dashboard_path }} (Admin User: admin, Password: {{ grafana_admin_password }})"
+  tags:
+    - grafana
+
+- name: Clean up Grafana Helm values file
+  ansible.builtin.file:
+    path: "{{ remote_helm_values_dir }}/grafana_values.yaml"
+    state: absent
+  when: remote_helm_values_dir is defined

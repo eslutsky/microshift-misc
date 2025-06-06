@@ -1,0 +1,8 @@
+galaxy_info:
+  author: Your Name
+  description: Installs Node Exporter, Prometheus, and Grafana using Helm.
+  company: Your Company
+  license: license (GPLv2, CC-BY, etc)
+  min_ansible_version: "2.9"
+  collections:
+    - community.kubernetes

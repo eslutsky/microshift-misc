@@ -1,0 +1,26 @@
+# This is a basic example for grafana_values.yaml.j2
+# It reflects the modification made by the `yq` command in the original script.
+# Copy your actual grafana_config.yaml content here and adapt the templating.
+
+adminPassword: "{{ grafana_admin_password }}"
+
+service:
+  type: NodePort
+  port: 3000
+  nodePort: {{ grafana_service_nodeport }}
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: "http://{{ monitoring_target_host_ip | default(prometheus_release_name + '.' + prometheus_namespace + '.svc.cluster.local') }}:{{ prometheus_service_nodeport if monitoring_target_host_ip else '80' }}" # Adjust port if using internal service name
+        isDefault: true
+        # Add other necessary fields for your Prometheus datasource
+        # jsonData:
+        #   httpMethod: POST
+        #   timeInterval: "5s"
+
+# Add other Grafana specific configurations from your grafana_config.yaml

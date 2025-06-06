@@ -1,0 +1,17 @@
+server:
+  global:
+    scrape_interval: 30s
+  service:
+    type: NodePort
+    nodePort: 32001
+  retention: "90d"
+  extraFlags:
+    - web.enable-lifecycle
+    - web.enable-admin-api
+serverFiles:
+  prometheus.yml:
+    scrape_configs:
+      - job_name: long_running_microshift
+        static_configs:
+          - targets:
+              - target_host

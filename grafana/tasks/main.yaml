@@ -1,0 +1,22 @@
+---
+# main tasks file for monitoring role
+
+- name: Install Helm and configure repositories
+  ansible.builtin.include_tasks: install_helm.yml
+  tags:
+    - helm
+
+- name: Deploy Node Exporter
+  ansible.builtin.include_tasks: deploy_node_exporter.yml
+  tags:
+    - node-exporter
+
+- name: Deploy Prometheus
+  ansible.builtin.include_tasks: deploy_prometheus.yml
+  tags:
+    - prometheus
+
+- name: Deploy Grafana
+  ansible.builtin.include_tasks: deploy_grafana.yml
+  tags:
+    - grafana

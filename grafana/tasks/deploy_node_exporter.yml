@@ -1,0 +1,34 @@
+---
+- name: Ensure remote Helm values directory exists for Node Exporter
+  ansible.builtin.file:
+    path: "{{ remote_helm_values_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy Node Exporter Helm values file
+  ansible.builtin.copy:
+    src: "{{ node_exporter_values_file }}" # From roles/monitoring/files/
+    dest: "{{ remote_helm_values_dir }}/node-exporter_values.yaml"
+    mode: '0644'
+
+- name: Deploy Node Exporter with Helm
+  community.kubernetes.helm:
+    name: "{{ node_exporter_release_name }}"
+    chart_ref: "{{ node_exporter_chart_name }}"
+    chart_repo_url: "{{ node_exporter_chart_repo }}"
+    chart_version: "{{ node_exporter_chart_version }}"
+    release_namespace: "{{ node_exporter_namespace }}"
+    create_namespace: "{{ node_exporter_create_namespace }}"
+    values_files:
+      - "{{ remote_helm_values_dir }}/node-exporter_values.yaml"
+    state: present
+    wait: true
+    timeout: "5m"
+  tags:
+    - node-exporter
+
+- name: Display Node Exporter endpoint
+  ansible.builtin.debug:
+    msg: "Node Exporter: http://{{ monitoring_host_ip }}:{{ node_exporter_service_nodeport }}/metrics"
+  tags:
+    - node-exporter

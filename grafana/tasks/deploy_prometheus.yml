@@ -1,0 +1,41 @@
+---
+- name: Assert that monitoring_target_host_ip is defined for Prometheus
+  ansible.builtin.assert:
+    that:
+      - monitoring_target_host_ip is defined
+      - monitoring_target_host_ip | length > 0
+    fail_msg: "monitoring_target_host_ip variable is required to configure Prometheus scrape targets."
+
+- name: Ensure remote Helm values directory exists for Prometheus
+  ansible.builtin.file:
+    path: "{{ remote_helm_values_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Template Prometheus Helm values file
+  ansible.builtin.template:
+    src: prometheus_values.yaml.j2
+    dest: "{{ remote_helm_values_dir }}/prometheus_values.yaml"
+    mode: '0644'
+
+- name: Deploy Prometheus with Helm
+  community.kubernetes.helm:
+    name: "{{ prometheus_release_name }}"
+    chart_ref: "{{ prometheus_chart_name }}"
+    chart_repo_url: "{{ prometheus_chart_repo }}"
+    chart_version: "{{ prometheus_chart_version }}"
+    release_namespace: "{{ prometheus_namespace }}"
+    create_namespace: "{{ prometheus_create_namespace }}"
+    values_files:
+      - "{{ remote_helm_values_dir }}/prometheus_values.yaml"
+    state: present
+    wait: true
+    timeout: "10m" # Prometheus can take longer
+  tags:
+    - prometheus
+
+- name: Display Prometheus endpoint
+  ansible.builtin.debug:
+    msg: "Prometheus: http://{{ monitoring_host_ip }}:{{ prometheus_service_nodeport }}"
+  tags:
+    - prometheus
