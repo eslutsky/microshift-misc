@@ -1,0 +1,143 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Install required packages
+      dnf:
+        name:
+          - tmux
+          - git
+        state: present
+
+    - name: Configure SSH (less secure, for testing only!)
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "StrictHostKeyChecking no"
+        - "UserKnownHostsFile /dev/null"
+ 
+    - name: Set home directory permissions
+      file:
+        path: /home/{{ ansible_user }}
+        mode: 0755
+    - name: k9s
+      include_role:
+        name: k9s
+- hosts: all
+  vars:
+    REMOTE_URL: https://github.com/eslutsky/microshift.git
+    REMOTE_BRANCH: cert-manager-operator
+  
+  tasks:
+    - name: Generate SSH key pair
+      openssh_keypair:
+        path: /home/{{ ansible_user }}/.ssh/id_rsa
+        type: rsa
+        size: 2048  # You can adjust the key size as needed
+      run_once: true
+
+    - name: Clone MicroShift repository
+      git:
+        repo: "{{ REMOTE_URL }}"
+        dest: /home/{{ ansible_user }}/microshift
+        version: "{{ REMOTE_BRANCH }}"  # Or specify a branch/tag
+        update: yes
+      remote_user: ec2-user
+
+    - name: Copy pull secret
+      copy:
+        src: /home/eslutsky/.pull-secret.json
+        dest: /home/ec2-user/.pull-secret.json
+        mode: 0644
+      remote_user: ec2-user
+
+    - name: generate settings
+      copy:
+        dest: /home/ec2-user/microshift/test/scenario_settings.sh
+        mode: 0644
+        content: |
+          SSH_PUBLIC_KEY=${HOME}/.ssh/id_rsa.pub
+          SSH_PRIVATE_KEY=${HOME}/.ssh/id_rsa
+
+    - name: configure-vm.sh --no-build
+      include_role:
+        name: run-ci-phase
+      vars:
+        script_name: "./scripts/devenv-builder/configure-vm.sh --no-build ~/.pull-secret.json"
+        stage_name: "configure-vm"
+# continue with the following only if volume group called "rhel"  is missing
+# look for first non-used disk in /dev/ 
+# run pvcreate /dev/xvdc 
+# run vgcreate rhel /dev/xvdc 
+    - name: Check if RPMs directory is empty
+      ansible.builtin.find:
+        paths: /home/ec2-user/microshift/_output/rpmbuild/RPMS
+        file_type: any # Considers files, directories, links, etc.
+        # Use recurse: no if you only care about the immediate contents,
+        # but for an empty check, 'any' without recurse (or with recurse: no) is fine.
+      register: rpms_dir_contents
+      become: false # Should not need sudo to list contents of user's home dir
+      # If the RPMS directory might not exist yet, you might want to ignore errors:
+      # ignore_errors: true
+
+    - name: make
+      include_role:
+        name: run-ci-phase
+      vars:
+        script_name: "make && make rpm && cd _output/rpmbuild/RPMS && createrepo ."
+        stage_name: "make"
+      when: rpms_dir_contents.matched == 0
+
+    - name: on centos create openshift-mirror-beta repo file 
+      copy:
+        dest: /etc/yum.repos.d/openshift-mirror-beta.repo
+        mode: 0644
+        content: |
+          [openshift-mirror-beta]
+          name=OpenShift Mirror Beta Repository
+          baseurl=https://mirror.openshift.com/pub/openshift-v4/{{ ansible_facts.architecture }}/dependencies/rpms/4.20-el9-beta/
+          enabled=1
+          gpgcheck=0
+          skip_if_unavailable=0
+      become: true
+      when: ansible_facts.distribution == "CentOS"
+
+    - name: create local.repo file
+      copy:
+        dest: /etc/yum.repos.d/local.repo
+        mode: 0644
+        content: |
+          [microshift-local]
+          # No spaces allowed in that [repo-name] or you get a "bad id for repo" error
+          name=My RPMs $releasever - $basearch
+          baseurl=/home/ec2-user/microshift/_output/rpmbuild/RPMS
+          enabled=1
+          metadata_expire=1d
+          gpgcheck=0
+      become: true
+
+    - name: Install microshift packages
+      dnf:
+        name:
+          - microshift-cert-manager
+        state: present
+      become: true
+
+    - name: Restart microshift service
+      systemd:
+        name: microshift
+        state: restarted
+        daemon_reload: yes
+      become: true
+
+    - name: healthcheck
+      include_role:
+        name: run-ci-phase
+      vars:
+        script_name: "sudo microshift healthcheck --namespace cert-manager --deployments cert-manager"
+        stage_name: "healthcheck"
+
+  
+ # healthcheck

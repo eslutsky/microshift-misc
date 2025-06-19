@@ -3,6 +3,8 @@
   ansible.builtin.stat:
     path: "{{ helm_install_dir }}/helm"
   register: helm_binary
+  tags:
+    - helm
 
 - name: Download and install Helm
   when: not helm_binary.stat.exists

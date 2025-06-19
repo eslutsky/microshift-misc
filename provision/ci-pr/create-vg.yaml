@@ -1,0 +1,89 @@
+---
+    - name: Check if volume group 'rhel' exists
+      command: vgs rhel
+      register: vg_rhel_check
+      changed_when: false
+      failed_when: false # We expect this to fail (rc!=0) if the VG doesn't exist
+      become: true
+
+    - name: Manage LVM for 'rhel' volume group if it is missing
+      block:
+        - name: Gather current block device facts
+          setup:
+            filter: ansible_devices
+          # This ensures ansible_facts.devices is up-to-date
+
+        - name: Get list of existing LVM Physical Volumes
+          command: pvs --noheadings -o pv_name
+          register: existing_pvs_raw
+          changed_when: false
+          failed_when: false # If pvs fails, we'll assume no PVs or handle it by _existing_pvs_list defaulting to empty
+
+        - name: Set cleaned list of existing PVs
+          set_fact:
+            _existing_pvs_list: "{{ existing_pvs_raw.stdout_lines | map('trim') | list if existing_pvs_raw.stdout_lines is defined else [] }}"
+
+        - name: Find the first suitable unused disk
+          set_fact:
+            # This fact will be set in the 'ansible_facts' of the loop result for matching items
+            _candidate_disk_name: "{{ item.key }}"
+          loop: "{{ ansible_facts.devices | dict2items | sort(attribute='key') }}" # Sort for predictable disk choice (e.g., xvda, xvdb)
+          loop_control:
+            label: "{{ item.key }}"
+          when:
+            # Conditions for a disk to be considered suitable:
+            - item.value.type == 'disk'                                                          # Must be a disk, not a partition or other type
+            - (item.value.partitions is undefined or item.value.partitions | length == 0)        # Must not have any existing partitions
+            - (item.value.mount is undefined or item.value.mount == "")                          # The disk itself must not be mounted
+            - ('/dev/' + item.key) not in _existing_pvs_list                                     # Must not already be an LVM PV
+            # Exclude common non-target devices
+            - not item.key.startswith('loop')                                                    # Exclude loop devices
+            - not item.key.startswith('sr')                                                      # Exclude CD/DVD drives
+            - not item.key.startswith('fd')                                                      # Exclude floppy drives
+            # Optional: Add a size filter if needed, e.g.
+            # - item.value.size_bytes | int > 10 * 1024 * 1024 * 1024  # Example: disk > 10GB
+          register: disk_search_results
+
+        - name: Select the name of the first found suitable disk
+          set_fact:
+            target_disk_name: >-
+              {{ (disk_search_results.results
+                  | selectattr('ansible_facts._candidate_disk_name', 'defined')
+                  | map(attribute='ansible_facts._candidate_disk_name')
+                  | first) | default(omit) }}
+
+        - name: Fail if no suitable unused disk is found
+          fail:
+            msg: "Could not find a suitable unused disk (whole, unpartitioned, not mounted, not a PV) to create the 'rhel' VG."
+          when: target_disk_name is undefined or target_disk_name == omit
+
+        - name: Set full path for the target disk device
+          set_fact:
+            target_disk_device_path: "/dev/{{ target_disk_name }}"
+
+        - name: Verify the selected disk exists and is a block device
+          stat:
+            path: "{{ target_disk_device_path }}"
+          register: disk_stat_check
+          failed_when: "not disk_stat_check.stat.exists or disk_stat_check.stat.isblk != true"
+
+        - name: Ensure GPT label on the selected disk (good practice before pvcreate on whole disk)
+          community.general.parted:
+            device: "{{ target_disk_device_path }}"
+            label: gpt
+            state: present # Ensures label exists, doesn't reformat if already gpt
+
+        - name: Create LVM physical volume on the selected disk
+          command: "pvcreate {{ target_disk_device_path }}"
+          # Alternatively, using the filesystem module:
+          # community.general.filesystem:
+          #   dev: "{{ target_disk_device_path }}"
+          #   fstype: pv
+
+        - name: Create volume group 'rhel' on the selected physical volume
+          community.general.lvg:
+            vg: rhel
+            pvs: "{{ target_disk_device_path }}"
+            state: present
+      when: vg_rhel_check.rc != 0 # Only run this block if 'vgs rhel' failed (VG doesn't exist)
+      become: true # All tasks in this block require elevated privileges

@@ -1,0 +1,31 @@
+---
+# main tasks file for monitoring role
+
+- name: Debug key variables for grafana role
+  ansible.builtin.debug:
+    msg:
+      - "helm_install_dir: {{ helm_install_dir | default('UNDEFINED') }}"
+      - "helm_version: {{ helm_version | default('UNDEFINED') }}"
+      - "grafana_chart_repo: {{ grafana_chart_repo | default('UNDEFINED') }}"
+      - "node_exporter_chart_repo: {{ node_exporter_chart_repo | default('UNDEFINED') }}"
+  tags: always # Ensure this debug task always runs
+
+- name: Install Helm and configure repositories
+  ansible.builtin.import_tasks:  install_helm.yaml
+  tags:
+    - helm
+
+- name: Deploy Node Exporter
+  ansible.builtin.import_tasks: deploy_node_exporter.yaml
+  tags:
+    - node-exporter
+
+- name: Deploy Prometheus
+  ansible.builtin.import_tasks: deploy_prometheus.yaml
+  tags:
+    - prometheus
+
+- name: Deploy Grafana
+  ansible.builtin.import_tasks: deploy_grafana.yaml
+  tags:
+    - grafana

@@ -1,5 +1,19 @@
 ---
 
+- name: Stop and remove the bootc container
+  containers.podman.podman_container:
+    name: "microshift-okd"
+    image: "{{ _microshift_image_name }}:{{ _microshift_image_tag }}"
+    state: absent
+    privileged: true
+    hostname: "{{ ansible_host }}"
+    network: host
+    volume:
+      - /dev:/dev:rslave
+    ports:
+      - "6443:6443"
+
+
 - name: Run a bootc container
   containers.podman.podman_container:
     name: "microshift-okd"
@@ -19,5 +33,13 @@
   containers.podman.podman_container_exec:
     name: microshift-okd
     command: "microshift healthcheck --namespace topolvm-system --deployments topolvm-controller"
+    workdir: /
+  become: true
+
+- name: patch the topolvm-provisioner storageclass to be default
+  containers.podman.podman_container_exec:
+    name: microshift-okd
+    command: |
+      oc patch storageclass topolvm-provisioner -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
     workdir: /
   become: true

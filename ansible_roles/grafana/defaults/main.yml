@@ -1,0 +1,43 @@
+monitoring_host_ip: "{{ ansible_default_ipv4.address }}"
+
+# Helm settings
+helm_install_dir: "/usr/local/sbin"
+helm_version: "v3.12.0" # Specify a recent Helm version
+
+# Node Exporter settings
+node_exporter_chart_repo: "https://prometheus-community.github.io/helm-charts"
+node_exporter_chart_name: "prometheus-node-exporter"
+node_exporter_chart_version: "4.47.0" # Check for the latest version
+node_exporter_release_name: "node-exporter"
+node_exporter_namespace: "default"
+node_exporter_create_namespace: false # 'default' namespace always exists
+node_exporter_values_file: "node-exporter_values.yaml" # Located in roles/monitoring/files/
+node_exporter_service_nodeport: 32000
+
+# Prometheus settings
+prometheus_chart_repo: "https://prometheus-community.github.io/helm-charts"
+prometheus_chart_name: "prometheus"
+prometheus_chart_version: "23.2.0" # Check for the latest version
+prometheus_release_name: "prometheus"
+prometheus_namespace: "default"
+prometheus_create_namespace: false # 'default' namespace always exists
+prometheus_service_nodeport: 32001
+# monitoring_target_host_ip is REQUIRED to be set by the user in playbook vars.
+# Example: monitoring_target_host_ip: "192.168.1.123" (IP of the node where node-exporter runs)
+
+# Grafana settings
+grafana_chart_repo: "https://grafana.github.io/helm-charts"
+grafana_chart_name: "grafana"
+grafana_chart_version: "6.58.5" # Check for the latest version
+grafana_release_name: "grafana"
+grafana_namespace: "default"
+grafana_create_namespace: false # 'default' namespace always exists
+grafana_service_nodeport: 32002
+grafana_admin_password: "admin" # Change this in production
+grafana_dashboard_path: "/d/rYdddlPWk/node-exporter-full" # Example, adjust if needed
+
+# Path on the remote server where Helm values files will be temporarily placed
+remote_helm_values_dir: "/tmp/helm_values"
+
+
+kubeconfig_path: "/var/lib/microshift/resources/kubeadmin/kubeconfig"

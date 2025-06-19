@@ -10,9 +10,9 @@ microshift_asset_filename: "microshift-x86_64.zip" # Matching your original exam
 microshift_download_dir: "./cache/microshift_assets"
 release_base_url: "https://github.com/microshift-io/microshift/releases/download/"
 # size of the lvm loopback disk
-lvm_disk_size_in_giga: 20
-
+lvm_disk_size_in_giga: 40
+kubeconfig_path: "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 # logical volume group name
 # WARNING: the name is default for the topolvm driver,it shouldn't be changed.
 lvm_vg_name: myvg1
-lvm_thinpool_size_giga: 6
+lvm_thinpool_size_giga: 16

@@ -11,7 +11,6 @@ source "${SCRIPT_DIR}/venv/bin/activate"
 
 # Initialize inventory_file_arg
 inventory_file_arg=""
-
 # Parse options using getopts
 # The leading colon in ":i:" enables silent error handling for getopts.
 # 'i:' means -i takes an argument.
@@ -65,7 +64,12 @@ run_playbook() {
     done
   fi
 
-  ansible-playbook -i "$inventory_to_use" "$playbook" ${current_extra_args}
+  # Set ANSIBLE_ROLES_PATH to include the directory relative to the script
+  export ANSIBLE_ROLES_PATH="${SCRIPT_DIR}/ansible_roles:${ANSIBLE_ROLES_PATH}"
+  echo "ANSIBLE_ROLES_PATH set to: ${ANSIBLE_ROLES_PATH}"
+
+  set -o pipefail
+  ansible-playbook -i "$inventory_to_use" "$playbook" ${current_extra_args}  2>&1 | while IFS= read -r line; do printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line"; done
   
   if [ "$temp_inventory_created" = true ] && [ -f "$inventory_to_use" ]; then
     rm "$inventory_to_use"

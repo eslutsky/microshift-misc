@@ -1,0 +1,23 @@
+---
+- name: Start tmux session and run CI script
+  command:
+    cmd: "tmux new-session -d -s {{ stage_name }} '{{ script_name }} 2>&1 | tee /home/ec2-user/{{ stage_name }}.log'"
+    chdir: /home/ec2-user/microshift
+  remote_user: ec2-user
+  register: tmux_result
+  changed_when: "'created successfully' in tmux_result.stderr"
+  ignore_errors: true
+
+- name: Wait for tmux command to complete
+  shell:
+    cmd: "tmux has-session -t {{ stage_name }}"
+  remote_user: ec2-user
+  register: wait_result
+  until: wait_result.rc != 0  # 0 means the session exists
+  retries: 360  # Check every 10 seconds for 1 hour (360 retries)
+  delay: 10
+  ignore_errors: true  # Don't fail if the session doesn't exist initially
+
+- name: Attach to tmux session (optional - for debugging)
+  debug:
+    msg: "You can attach to the tmux session with: ssh ec2-user@{{ ansible_host }} tmux a -t {{ stage_name }}"

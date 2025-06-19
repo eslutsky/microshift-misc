@@ -26,6 +26,7 @@
     chart_version: "{{ prometheus_chart_version }}"
     release_namespace: "{{ prometheus_namespace }}"
     create_namespace: "{{ prometheus_create_namespace }}"
+    kubeconfig: "{{ kubeconfig_path }}"
     values_files:
       - "{{ remote_helm_values_dir }}/prometheus_values.yaml"
     state: present

@@ -3,11 +3,23 @@
 # Copy your actual prometheus_config.yaml content here and adapt the templating.
 
 server:
+  persistentVolume:
+    enabled: true # Ensure PVC is enabled
+    size: "2Gi"   # Set the desired PVC size
   service:
     type: NodePort
     nodePort: {{ prometheus_service_nodeport }}
     servicePort: 80 # Internal port for Prometheus server
 
+nodeExporter:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+pushgateway:
+  enabled: false
+  
 serverFiles:
   prometheus.yml:
     scrape_configs:
@@ -26,3 +38,20 @@ serverFiles:
       # - job_name: 'kubernetes-pods'
       #   kubernetes_sd_configs:
       #   - role: pod
+
+# Configuration for kube-state-metrics to address Security Context Constraints.
+# This is often required for OpenShift or other restrictive Kubernetes environments.
+kube-state-metrics:
+  # Ensures the pod does not request specific UIDs/GIDs that are forbidden
+  # by default SCCs like restricted-v2.
+  # Setting these to null allows the platform (e.g., OpenShift) to assign
+  # appropriate UIDs/GIDs from the namespace's allocated range.
+  podSecurityContext:
+    fsGroup: null
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+    runAsNonRoot: true # Ensure the container runs as a non-root user
+    # If seccompProfile was explicitly set or needed, you can manage it here too.
+    # seccompProfile:
+    #   type: RuntimeDefault
