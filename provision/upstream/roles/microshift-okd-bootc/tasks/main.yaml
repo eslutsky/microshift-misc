@@ -1,6 +1,9 @@
 ---
 
 - name: prepare topolvm backend
+  ansible.builtin.include_tasks: deprovision-topolvm.yaml
+
+- name: prepare topolvm backend
   ansible.builtin.include_tasks: topolvm.yaml
 
 - name: build microshift bootc containers from released rpms

@@ -1,0 +1,69 @@
+---
+- name: Deprovision TopoLVM storage setup
+  block:
+    - name: Check if /tmp/lvmdisk is associated with a loop device
+      ansible.builtin.shell:
+        cmd: "losetup -j /tmp/lvmdisk | head -n1 | cut -d: -f1 | tr -d '\n'"
+      register: _associated_loop_device
+      changed_when: false
+      failed_when: false # rc!=0 if not associated, stdout will be empty
+      become: true
+
+    - name: Set loop device path fact
+      ansible.builtin.set_fact:
+        loop_device_path: "{{ _associated_loop_device.stdout | trim }}"
+
+    - name: Remove thin pool logical volume 'thinpool' from volume group 'myvg1'
+      community.general.lvol:
+        vg: myvg1
+        lv: thinpool
+        state: absent
+        force: true
+      become: true
+      failed_when: false # Don't fail if it doesn't exist
+      when: loop_device_path != ""
+
+    - name: Remove volume group 'myvg1'
+      community.general.lvg:
+        vg: myvg1
+        state: absent
+        force: true
+      become: true
+      failed_when: false # Don't fail if it doesn't exist
+      when: loop_device_path != ""
+
+    - name: Detach loop device {{ loop_device_path }}
+      ansible.builtin.command:
+        cmd: "losetup -d {{ loop_device_path }}"
+      when: loop_device_path != ""
+      become: true
+      failed_when: false # Don't fail if already detached
+      changed_when: true
+
+    - name: Remove /tmp/lvmdisk file
+      ansible.builtin.file:
+        path: /tmp/lvmdisk
+        state: absent
+      become: true
+
+    - name: Debug completion message
+      ansible.builtin.debug:
+        msg: "TopoLVM storage deprovisioning completed"
+
+  rescue:
+    - name: Handle deprovisioning errors
+      ansible.builtin.debug:
+        msg: "Warning: Some deprovisioning steps may have failed, but continuing cleanup"
+
+    - name: Force cleanup - try to detach any loop devices for /tmp/lvmdisk
+      ansible.builtin.shell:
+        cmd: "losetup -j /tmp/lvmdisk | cut -d: -f1 | xargs -r losetup -d"
+      become: true
+      failed_when: false
+      changed_when: false
+
+    - name: Force cleanup - remove /tmp/lvmdisk file
+      ansible.builtin.file:
+        path: /tmp/lvmdisk
+        state: absent
+      become: true 

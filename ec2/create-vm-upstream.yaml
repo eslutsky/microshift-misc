@@ -14,8 +14,11 @@
       # ami_id: ami-0b53b236f930ad98b x64 - RHEL9.4
       #instance_type: c5.metal #c7g.metal #m4.4xlarge
       #instance_type: c7g.metal #ARM
-      instance_type:  m4.4xlarge
+      #instance_type:  m4.4xlarge # X86-64
+      
+      instance_type:  m5a.4xlarge	
       # ami_id: ami-03dc644bdc08e4fd5 - Ubuntu
-      ami_id: ami-0377415b3fa05f234
+      #ami_id: ami-0377415b3fa05f234 # CentOS Stream 9 X86-64
+      ami_id: ami-057ac7d80dcb4e3d2
       host_device_name: /dev/xvdc
       public_key: /home/eslutsky/.ssh/id_rsa.pub

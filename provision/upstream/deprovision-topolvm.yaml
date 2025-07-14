@@ -1,0 +1,39 @@
+---
+- name: Deprovision TopoLVM Storage Setup
+  hosts: all
+  gather_facts: false
+  vars:
+    # Define any variables needed for deprovisioning
+    # These should match the variables used in the original setup
+    
+  tasks:
+    - name: Include deprovisioning tasks
+      ansible.builtin.include_tasks: roles/microshift-okd-bootc/tasks/deprovision-topolvm.yaml
+      
+    - name: Verify cleanup completion
+      block:
+        - name: Check if /tmp/lvmdisk still exists
+          ansible.builtin.stat:
+            path: /tmp/lvmdisk
+          register: _lvmdisk_check
+          
+        - name: Check for remaining loop devices
+          ansible.builtin.shell:
+            cmd: "losetup -j /tmp/lvmdisk || true"
+          register: _loop_check
+          changed_when: false
+          
+        - name: Check for volume group 'myvg1'
+          ansible.builtin.shell:
+            cmd: "vgs myvg1 || true"
+          register: _vg_check
+          changed_when: false
+          become: true
+          
+        - name: Display cleanup status
+          ansible.builtin.debug:
+            msg: |
+              Cleanup Status:
+              - /tmp/lvmdisk exists: {{ _lvmdisk_check.stat.exists | default('unknown') }}
+              - Loop devices for /tmp/lvmdisk: {{ 'none' if _loop_check.stdout == '' else _loop_check.stdout }}
+              - Volume group 'myvg1': {{ 'not found' if _vg_check.rc != 0 else 'still exists' }} 

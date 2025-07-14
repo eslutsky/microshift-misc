@@ -12,7 +12,8 @@
         region: eu-west-1
         stack_name: "eslutsky-stack"
         cf_tpl_file: template/aws-template.yaml  # Update with actual path
-        instance_type:  c5.metal
+        # instance_type:  c5.metal
+        instance_type: m4.4xlarge
         ami_id: ami-0b53b236f930ad98b
         host_device_name: /dev/xvdc
         public_key: /home/eslutsky/.ssh/id_rsa.pub

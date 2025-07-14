@@ -27,7 +27,7 @@
         name: k9s
 - hosts: all
   vars:
-    REMOTE_URL: https://github.com/eslutsky/microshift.git
+    REMOTE_URL: https://github.com/openshift/microshift.git
     REMOTE_BRANCH: cert-manager-operator
   
   tasks:
@@ -38,13 +38,28 @@
         size: 2048  # You can adjust the key size as needed
       run_once: true
 
-    - name: Clone MicroShift repository
-      git:
-        repo: "{{ REMOTE_URL }}"
-        dest: /home/{{ ansible_user }}/microshift
-        version: "{{ REMOTE_BRANCH }}"  # Or specify a branch/tag
-        update: yes
-      remote_user: ec2-user
+    - name: Set PR number to clone
+      set_fact:
+        PR_NUMBER: "{{ lookup('env', 'PR_NUMBER') }}"
+
+    - name: Clone MicroShift repository from PR
+      block:
+        - name: Attempt to clone MicroShift repository from PR
+          git:
+            repo: "{{ REMOTE_URL }}"
+            dest: /home/{{ ansible_user }}/microshift
+            # Fetch the PR as a local branch named 'pr-{{ PR_NUMBER }}'
+            refspec: "+refs/pull/{{ PR_NUMBER }}/head:refs/heads/pr-{{ PR_NUMBER }}"
+            update: yes
+            version: "pr-{{ PR_NUMBER }}"
+          remote_user: ec2-user
+      rescue:
+        - name: Ignore 'checked out at' git fetch error, fail otherwise
+          ansible.builtin.fail:
+            msg: "{{ ansible_failed_result.msg }}"
+          when: ansible_failed_result.msg is not search('checked out at')
+          vars:
+            ansible_failed_result: "{{ ansible_failed_result | default({}) }}"
 
     - name: Copy pull secret
       copy:
@@ -121,8 +136,25 @@
     - name: Install microshift packages
       dnf:
         name:
+          - microshift
+        state: present
+      become: true
+
+    - name: Install optional packages
+      dnf:
+        name:
           - microshift-cert-manager
         state: present
+      become: true
+      ignore_errors: true
+
+    - name: create microshift config
+      copy:
+        dest: /etc/microshift/config.yaml
+        content: |
+          apiServer:
+              subjectAltNames:
+              - {{ansible_ssh_host}}
       become: true
 
     - name: Restart microshift service
