@@ -1,0 +1,6 @@
+---
+- name: Deploy ELK Stack
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - role: elk-stack
