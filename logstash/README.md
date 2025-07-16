@@ -1,7 +1,7 @@
 ## Diagram
 
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph "JUnit XML Source"
         JUnitXML[JUnits XML File]
     end
