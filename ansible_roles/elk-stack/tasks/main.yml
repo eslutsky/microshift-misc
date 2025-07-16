@@ -1,0 +1,172 @@
+---
+- name: Set KUBECONFIG environment variable
+  set_fact:
+    kubeconfig_env: "{{ kubeconfig_path }}"
+
+- name: Apply CoreDNS ConfigMap
+  kubernetes.core.k8s:
+    definition: "{{ coredns_configmap }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Elasticsearch PVC
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ elasticsearch_pvc }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply ECK CRDs
+  kubernetes.core.k8s:
+    src: "{{ eck_crds_url }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply ECK Operator
+  kubernetes.core.k8s:
+    src: "{{ eck_operator_url }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Elasticsearch manifest
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ elasticsearch_manifest }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Kibana manifest
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ kibana_manifest }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Logstash config ConfigMap
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ logstash_config_configmap }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Logstash pipeline ConfigMap
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ logstash_pipeline_configmap }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Logstash Deployment
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ logstash_deployment }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Logstash Service
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ logstash_service }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Filebeat ServiceAccount
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ filebeat_service_account }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Filebeat ClusterRole
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ filebeat_cluster_role }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Filebeat ClusterRoleBinding
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ filebeat_cluster_role_binding }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Filebeat Beat manifest
+  kubernetes.core.k8s:
+    namespace: "default"
+    definition: "{{ filebeat_manifest }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Elasticsearch NodePort Service
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ elasticsearch_nodeport_service }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Apply Kibana NodePort Service
+  kubernetes.core.k8s:
+    namespace: "default"  
+    definition: "{{ kibana_nodeport_service }}"
+    state: present
+    kubeconfig: "{{ kubeconfig_env }}"
+
+- name: Wait for Elasticsearch to be ready
+  kubernetes.core.k8s_info:
+    api_version: elasticsearch.k8s.elastic.co/v1
+    kind: Elasticsearch
+    name: quickstart
+    namespace: default
+    kubeconfig: "{{ kubeconfig_env }}"
+  register: elasticsearch_status
+  until: 
+    - elasticsearch_status.resources | length > 0
+    - elasticsearch_status.resources[0].status.health is defined
+    - elasticsearch_status.resources[0].status.health == "green"
+    - elasticsearch_status.resources[0].status.availableNodes | default(0) | int > 0
+  retries: 30
+  delay: 20
+
+- name: Wait for Kibana to be ready
+  kubernetes.core.k8s_info:
+    api_version: kibana.k8s.elastic.co/v1
+    kind: Kibana
+    name: quickstart
+    namespace: default
+    kubeconfig: "{{ kubeconfig_env }}"
+  register: kibana_status
+  until:
+    - kibana_status.resources | length > 0
+    - kibana_status.resources[0].status.health is defined
+    - kibana_status.resources[0].status.health == "green"
+    - kibana_status.resources[0].status.availableNodes | default(0) | int > 0
+  retries: 30
+  delay: 20
+
+- name: Read kubeconfig file
+  slurp:
+    src: "{{ kubeconfig_env }}"
+  register: kubeconfig_content
+
+- name: Extract node FQDN from kubeconfig server
+  set_fact:
+    node_fqdn: "{{ (kubeconfig_content.content | b64decode | from_yaml).clusters[0].cluster.server | regex_replace('^https?://') | regex_replace(':[0-9]+$') }}"
+
+- name: Get Elasticsearch password
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: quickstart-es-elastic-user
+    namespace: default
+    kubeconfig: "{{ kubeconfig_env }}"
+  register: elastic_secret
+
+- name: Display access information
+  debug:
+    msg:
+      - "ELK Stack has been deployed successfully!"
+      - "Elasticsearch is available at: https://{{ node_fqdn }}:30020"
+      - "Kibana is available at: https://{{ node_fqdn }}:30021"
+      - "Username: elastic"
+      - "Password: {{ elastic_secret.resources[0].data.elastic | b64decode if elastic_secret.resources | length > 0 else 'Secret not found' }}" 

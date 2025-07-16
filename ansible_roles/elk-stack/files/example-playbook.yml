@@ -1,0 +1,54 @@
+---
+- name: Deploy ELK Stack
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  
+  roles:
+    - role: elk-stack
+      vars:
+        # Optional: Override default kubeconfig path
+        kubeconfig_path: "{{ ansible_env.HOME }}/.kube/config"
+        
+        # Optional: Use different versions
+        # elasticsearch_version: "8.14.0"
+        # filebeat_version: "8.14.0"
+        
+        # Optional: Customize storage size
+        # elasticsearch_pvc:
+        #   kind: PersistentVolumeClaim
+        #   apiVersion: v1
+        #   metadata:
+        #     name: elasticsearch-data-quickstart-es-default-0
+        #   spec:
+        #     accessModes:
+        #     - ReadWriteOnce
+        #     resources:
+        #       requests:
+        #         storage: 5Gi
+        #     storageClassName: topolvm-provisioner
+
+  post_tasks:
+    - name: Wait a moment for services to stabilize
+      pause:
+        seconds: 30
+    
+    - name: Get Elasticsearch password
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: quickstart-es-elastic-user
+        namespace: default
+        kubeconfig: "{{ kubeconfig_path }}"
+      register: elastic_secret
+      
+    - name: Display connection information
+      debug:
+        msg:
+          - "====== ELK Stack Deployment Complete ======"
+          - "Elasticsearch: http://<your-node-ip>:30020"
+          - "Kibana: http://<your-node-ip>:30021"
+          - "Username: elastic"
+          - "Password: {{ elastic_secret.resources[0].data.elastic | b64decode if elastic_secret.resources | length > 0 else 'Not yet available' }}"
+          - ""
+          - "To get node IP, run: oc get nodes -o wide" 
