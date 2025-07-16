@@ -1,28 +1,23 @@
 ## Diagram
 
 ```mermaid
+flowchart TD
+    subgraph "JUnit XML Source"
+        JUnitXML[JUnits XML File]
+    end
 
-title JUnit XML to ELK Stack Flow
+    subgraph "Podman"
+        LogstashIngest[Logstash Ingest]
+    end
 
+    subgraph "Microshift ELK Stack"
+        Elasticsearch[Elasticsearch]
+        Kibana[Kibana]
+    end
 
-
-JUnits XML File [icon: file-text]
-
-Podman  [icon: upload-cloud] {
-    Logstash Ingest [icon: logstash, label: "Logstash"]
-}
-
-Microshift ELK Stack [icon: layers] {
-  Elasticsearch [icon: elasticsearch]
-    Kibana [icon: kibana]
-}
-
-// Connections
-Logstash Ingest > Elasticsearch: index data
-
-Elasticsearch > Kibana: visualize & analyze
-
-JUnits XML File > Logstash Ingest
+    JUnitXML --> LogstashIngest
+    LogstashIngest -->|index data| Elasticsearch
+    Elasticsearch -->|visualize & analyze| Kibana
 ```
 
 
