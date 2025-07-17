@@ -32,11 +32,15 @@
 - name: Wait for stack creation to complete
   command:
     cmd: "aws --region {{ region }} cloudformation wait stack-create-complete --stack-name {{ stack_name }}"
+  environment:
+    AWS_DEFAULT_OUTPUT: "json"
   when: cf_result.changed
 
 - name: Describe CloudFormation stack
   command:
     cmd: "aws --region {{ region }} cloudformation describe-stacks --stack-name {{ stack_name }}"
+  environment:
+    AWS_DEFAULT_OUTPUT: "json"
   register: stack_description
 
 - name: Extract instance ID
@@ -47,6 +51,8 @@
 - name: Wait for instance status to be OK
   command:
     cmd: "aws --region {{ region }} ec2 wait instance-status-ok --instance-id {{ instance_id }}"
+  environment:
+    AWS_DEFAULT_OUTPUT: "json"
   when: instance_id is defined
 
 - name: Get public IP address
