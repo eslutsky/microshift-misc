@@ -48,8 +48,9 @@ run_playbook() {
     fi
   else
     # Dynamic inventory generation
-    echo "Attempting to dynamically generate inventory from AWS EC2 instances..."
-    instances=$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].[PublicDnsName,KeyName]" --output json)
+    AWS_REGION="${AWS_REGION:-eu-west-1}"  # Default region if not set
+    echo "Attempting to dynamically generate inventory from AWS EC2 instances in region: $AWS_REGION..."
+    instances=$(aws ec2 describe-instances --region "$AWS_REGION" --filters "Name=instance-state-name,Values=running" --query "Reservations[*].Instances[*].[PublicDnsName,KeyName]" --output json)
     inventory_to_use=$(mktemp)
     temp_inventory_created=true
     echo "Dynamically generated inventory file: $inventory_to_use"
@@ -98,6 +99,12 @@ fi
 case "$mode" in
   "create")
     playbook="${SCRIPT_DIR}/ec2/create-vm-${env}.yaml"
+    ;;
+  "stop")
+    playbook="${SCRIPT_DIR}/ec2/stop-vms.yaml"
+    ;;
+  "start")
+    playbook="${SCRIPT_DIR}/ec2/start-vms.yaml"
     ;;
   "destroy")
     playbook="${SCRIPT_DIR}/ec2/destroy-vm.yaml"

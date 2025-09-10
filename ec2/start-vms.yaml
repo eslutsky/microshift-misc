@@ -1,0 +1,45 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    region: eu-west-1
+    stack_name: "eslutsky-stack-1"
+
+  tasks:
+    - name: gather ec2 instances 
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:aws:cloudformation:stack-name": "{{ stack_name }}"
+          instance-state-name: [ "stopped" ]
+      register: ec2_list
+      
+    - name: Print stack_name
+      debug:
+        msg: "Stack name is {{ stack_name }}"
+
+    - name: Print all ec2_list parameters
+      debug:
+        var: ec2_list
+
+    - name: Print region
+      debug:
+        msg: "Region is {{ region }}"
+
+    - name: start instances 
+      include_tasks: "tasks/start-older-vms.yaml"
+      loop: "{{ ec2_list.instances }}"
+
+    - name: gather ec2 instances 
+      ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:aws:cloudformation:stack-name": "{{ stack_name }}"
+      register: ec2_list
+
+    - name: Print public IP addresses of started VMs
+      debug:
+        msg: "Started VM {{ item.instance_id }} has public IP {{ item.public_ip_address }}"
+      loop: "{{ ec2_list.instances }}"
+      when: item.public_ip_address is defined
