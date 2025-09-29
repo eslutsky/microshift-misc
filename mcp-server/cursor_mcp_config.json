@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "microshift-vm-manager": {
+      "command": "/home/eslutsky/dev/microshift-misc/venv/bin/python",
+      "args": ["/home/eslutsky/dev/microshift-misc/mcp-server/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "/home/eslutsky/dev/microshift-misc/mcp-server"
+      }
+    }
+  }
+}
+
+
